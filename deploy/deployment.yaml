@@ -1,0 +1,105 @@
+apiVersion: apps/v1
+kind: Deployment
+metadata:
+  name: tektonit
+  namespace: tektonit
+  labels:
+    app.kubernetes.io/name: tektonit
+    app.kubernetes.io/component: monitor
+spec:
+  replicas: 1
+  strategy:
+    type: Recreate
+  selector:
+    matchLabels:
+      app.kubernetes.io/name: tektonit
+  template:
+    metadata:
+      labels:
+        app.kubernetes.io/name: tektonit
+        app.kubernetes.io/component: monitor
+      annotations:
+        prometheus.io/scrape: "true"
+        prometheus.io/port: "8080"
+        prometheus.io/path: "/metrics"
+    spec:
+      terminationGracePeriodSeconds: 60
+      containers:
+        - name: agent
+          image: quay.io/flacatus/tektonit:latest
+          ports:
+            - name: health
+              containerPort: 8080
+              protocol: TCP
+          livenessProbe:
+            httpGet:
+              path: /healthz
+              port: health
+            initialDelaySeconds: 30
+            periodSeconds: 30
+            failureThreshold: 3
+          readinessProbe:
+            httpGet:
+              path: /readyz
+              port: health
+            initialDelaySeconds: 5
+            periodSeconds: 10
+          resources:
+            requests:
+              cpu: 100m
+              memory: 256Mi
+            limits:
+              cpu: "1"
+              memory: 1Gi
+          env:
+            - name: GITHUB_REPO
+              value: "flacatus/tekton-integration-catalog"
+            - name: REPO_BRANCH
+              value: "main"
+            - name: POLL_INTERVAL_SECONDS
+              value: "3600"
+            - name: BATCH_SIZE
+              value: "10"
+            - name: MAX_FIX_ATTEMPTS
+              value: "3"
+            - name: LLM_PROVIDER
+              value: "gemini"
+            - name: WORK_DIR
+              value: "/workspace/catalog"
+            - name: STATE_DB_PATH
+              value: "/var/lib/tektonit/state.db"
+            - name: GEMINI_API_KEY
+              valueFrom:
+                secretKeyRef:
+                  name: tektonit-secrets
+                  key: GEMINI_API_KEY
+            - name: GITHUB_TOKEN
+              valueFrom:
+                secretKeyRef:
+                  name: tektonit-secrets
+                  key: GITHUB_TOKEN
+          volumeMounts:
+            - name: workspace
+              mountPath: /workspace
+            - name: state
+              mountPath: /var/lib/tektonit
+      volumes:
+        - name: workspace
+          emptyDir:
+            sizeLimit: 2Gi
+        - name: state
+          persistentVolumeClaim:
+            claimName: tektonit-state
+      restartPolicy: Always
+---
+apiVersion: v1
+kind: PersistentVolumeClaim
+metadata:
+  name: tektonit-state
+  namespace: tektonit
+spec:
+  accessModes:
+    - ReadWriteOnce
+  resources:
+    requests:
+      storage: 100Mi
