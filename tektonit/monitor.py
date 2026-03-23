@@ -52,7 +52,7 @@ from tektonit.observability import (
     update_status,
 )
 from tektonit.parser import TektonResource, load_all_resources
-from tektonit.prompts import get_script_languages, has_testable_scripts
+from tektonit.prompts import TEKTON_LINTER_PROMPT, get_script_languages, has_testable_scripts
 from tektonit.resilience import llm_breaker
 from tektonit.state import StateStore
 from tektonit.test_generator import (
@@ -232,6 +232,112 @@ def _sort_by_risk(resources: list[TektonResource]) -> list[TektonResource]:
     for r, score in scored[:5]:
         log.info("    Risk score: %.1f — %s/%s", score, r.kind, r.name)
     return [r for r, _ in scored]
+
+
+# -- Linting & bug detection -------------------------------------------------
+
+
+def _lint_and_report_bugs(
+    resources: list[TektonResource],
+    provider,
+    gh: GitHubClient,
+    work_dir: str,
+    state: StateStore,
+) -> dict:
+    """Lint all resources for structural bugs and create GitHub issues.
+
+    Uses LLM-powered linter to detect:
+    - Duplicate parameters
+    - Invalid references
+    - Dependency issues
+    - Unused parameters
+    - Type mismatches
+
+    Creates one GitHub issue per bug found (deduplicates based on state).
+    """
+    log.info("Running structural validation on %d resources...", len(resources))
+
+    bugs_found = []
+    issues_created = 0
+
+    for resource in resources:
+        if _shutdown or llm_breaker.is_open:
+            break
+
+        try:
+            # Read YAML file
+            with open(resource.source_path) as f:
+                yaml_content = f.read()
+
+            # Build lint prompt
+            user_prompt = f"""Lint this Tekton {resource.kind} YAML file for structural bugs.
+
+File: {resource.source_path}
+
+```yaml
+{yaml_content}
+```
+
+Report ALL issues found with exact line numbers and fix suggestions.
+Focus especially on duplicate parameters and invalid references."""
+
+            # Call LLM linter
+            response = provider.generate(TEKTON_LINTER_PROMPT, user_prompt)
+            lint_result = response.content
+
+            # Check if bugs were found (look for ❌ in output)
+            if "❌" in lint_result:
+                log.warning("  Bugs found in %s/%s", resource.kind, resource.name)
+
+                bug_entry = {
+                    "resource": resource.name,
+                    "kind": resource.kind,
+                    "path": str(Path(resource.source_path).relative_to(work_dir)),
+                    "issues": lint_result,
+                }
+                bugs_found.append(bug_entry)
+
+                # Create GitHub issue (if not already reported)
+                issue_key = f"{resource.kind}/{resource.name}"
+                if not state.bug_already_reported(issue_key):
+                    title = f"🐛 Structural issues in {resource.kind}: {resource.name}"
+                    body = f"""## Structural Validation Issues
+
+**Resource:** `{resource.kind}/{resource.name}`
+**File:** `{bug_entry["path"]}`
+
+The autonomous agent detected structural issues in this Tekton resource:
+
+{lint_result}
+
+---
+**How to fix:**
+1. Review the issues listed above
+2. Make the suggested changes to the YAML file
+3. Test that the resource still works
+4. Commit and push
+
+🤖 This issue was automatically created by [tektonit](https://github.com/flacatus/test_agent)
+"""
+                    issue = gh.repo.create_issue(
+                        title=title,
+                        body=body,
+                        labels=["bug", "automated", "linting"],
+                    )
+                    log.info("  Created issue: %s", issue.html_url)
+                    state.mark_bug_reported(issue_key, issue.html_url)
+                    issues_created += 1
+                    time.sleep(2)  # Rate limiting
+
+            else:
+                log.debug("  ✅ No issues in %s/%s", resource.kind, resource.name)
+
+        except Exception as e:
+            log.warning("Linting failed for %s/%s: %s", resource.kind, resource.name, e)
+            continue
+
+    log.info("Linting complete: %d bugs found, %d issues created", len(bugs_found), issues_created)
+    return {"bugs_found": len(bugs_found), "issues_created": issues_created}
 
 
 # -- PR feedback learning ----------------------------------------------------
@@ -449,6 +555,8 @@ def run_cycle(state: StateStore) -> dict:
         "total": 0,
         "testable": 0,
         "untested": 0,
+        "bugs_found": 0,
+        "issues_created": 0,
         "prs_created": 0,
         "skipped": 0,
         "errors": 0,
@@ -468,6 +576,12 @@ def run_cycle(state: StateStore) -> dict:
         resources = load_all_resources(str(work_path))
         summary["total"] = len(resources)
         RESOURCES_GAUGE.labels(category="total").set(len(resources))
+
+        # Lint all resources for structural bugs (before test generation)
+        log.info("Step 1: Linting resources for structural bugs...")
+        lint_summary = _lint_and_report_bugs(resources, provider, gh, WORK_DIR, state)
+        summary["bugs_found"] = lint_summary["bugs_found"]
+        summary["issues_created"] = lint_summary["issues_created"]
 
         testable = [r for r in resources if has_testable_scripts(r)]
         summary["testable"] = len(testable)
@@ -644,9 +758,12 @@ def main():
 
         elapsed = time.time() - cycle_start
         log.info(
-            "== Cycle done in %.0fs: %d total, %d testable, %d untested, %d PRs, %d skipped, %d errors ==",
+            "== Cycle done in %.0fs: %d total, %d bugs→%d issues, %d testable, "
+            "%d untested, %d PRs, %d skipped, %d errors ==",
             elapsed,
             s["total"],
+            s["bugs_found"],
+            s["issues_created"],
             s["testable"],
             s["untested"],
             s["prs_created"],

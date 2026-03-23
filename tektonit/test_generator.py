@@ -27,7 +27,6 @@ from tektonit.prompts import (
     build_bats_prompt,
     build_propose_prompt,
     build_pytest_prompt,
-    get_script_languages,
     has_testable_scripts,
 )
 
@@ -36,6 +35,83 @@ log = logging.getLogger("tektonit")
 SANITY_CHECK_DIR = "sanity-check"
 DEFAULT_MAX_FIX_ATTEMPTS = 10
 FLAKY_CHECK_RUNS = 2  # extra runs to detect flakiness
+
+
+# -- Language detection ------------------------------------------------------
+
+
+def detect_script_language(script: str, provider: LLMProvider | None = None) -> str:
+    """Detect script language using fast heuristics with optional LLM fallback.
+
+    Returns "python" or "bash".
+    """
+    if not script or not script.strip():
+        return "bash"
+
+    first_line = script.split("\n")[0] if script else ""
+
+    # Fast path: Check shebang for python
+    if "python" in first_line.lower():
+        return "python"
+
+    # Fast path: Check shebang for bash/sh
+    if any(x in first_line for x in ["bash", "sh", "/bin/sh", "/usr/bin/sh"]):
+        return "bash"
+
+    # Check for obvious Python syntax in first 200 chars
+    script_start = script[:200].lower()
+    python_indicators = ["import ", "from ", "def ", "class ", "print(", "__name__"]
+    if any(indicator in script_start for indicator in python_indicators):
+        return "python"
+
+    # Check for obvious bash syntax
+    bash_indicators = ["#!/bin/bash", "#!/bin/sh", "source ", ". /", "set -", "export "]
+    if any(indicator in script_start for indicator in bash_indicators):
+        return "bash"
+
+    # LLM fallback for ambiguous cases
+    if provider:
+        try:
+            prompt = f"""Analyze this script and determine if it's Python or Bash.
+
+Script (first 500 characters):
+```
+{script[:500]}
+```
+
+Reply with ONLY one word: "python" or "bash"
+"""
+            response = provider.generate("You are a programming language expert.", prompt)
+            language = response.content.strip().lower()
+
+            if "python" in language:
+                log.info("    LLM detected Python script")
+                return "python"
+            else:
+                log.info("    LLM detected Bash script")
+                return "bash"
+        except Exception as e:
+            log.warning(f"    LLM language detection failed: {e}, defaulting to bash")
+            return "bash"
+
+    # Final fallback
+    return "bash"
+
+
+def detect_resource_languages(resource: TektonResource, provider: LLMProvider | None = None) -> list[str]:
+    """Detect all languages used in a resource's embedded scripts.
+
+    Returns list of unique languages (e.g., ["bash"], ["python"], or ["bash", "python"]).
+    """
+    if not has_testable_scripts(resource):
+        return []
+
+    languages = set()
+    for _, script in resource.embedded_scripts:
+        lang = detect_script_language(script, provider)
+        languages.add(lang)
+
+    return sorted(list(languages))  # Sort for deterministic order
 
 
 # -- Failure classification --------------------------------------------------
@@ -1307,7 +1383,8 @@ def generate_all_tests(
         if callback:
             callback("start", index=i, total=len(resources), resource=resource)
 
-        languages = get_script_languages(resource)
+        # Detect languages using fast heuristics + optional LLM fallback
+        languages = detect_resource_languages(resource, provider)
         existing = find_existing_tests(resource)
 
         for language in sorted(languages):

@@ -115,6 +115,15 @@ class StateStore:
                     created_at TEXT NOT NULL
                 )
             """)
+            # Reported bugs tracking (for GitHub issues)
+            conn.execute("""
+                CREATE TABLE IF NOT EXISTS reported_bugs (
+                    id INTEGER PRIMARY KEY AUTOINCREMENT,
+                    issue_key TEXT NOT NULL UNIQUE,
+                    issue_url TEXT NOT NULL,
+                    created_at TEXT NOT NULL
+                )
+            """)
             conn.commit()
 
     def _conn(self) -> sqlite3.Connection:
@@ -296,6 +305,23 @@ class StateStore:
                 (resource_kind, limit),
             ).fetchall()
             return [PRFeedback(*r) for r in rows]
+
+    # -- Bug reporting ---------------------------------------------------------
+
+    def bug_already_reported(self, issue_key: str) -> bool:
+        """Check if a bug has already been reported as a GitHub issue."""
+        with self._conn() as conn:
+            row = conn.execute("SELECT id FROM reported_bugs WHERE issue_key=?", (issue_key,)).fetchone()
+            return row is not None
+
+    def mark_bug_reported(self, issue_key: str, issue_url: str):
+        """Mark a bug as reported with its GitHub issue URL."""
+        with self._conn() as conn:
+            conn.execute(
+                "INSERT INTO reported_bugs (issue_key, issue_url, created_at) VALUES (?, ?, ?)",
+                (issue_key, issue_url, self._now()),
+            )
+            conn.commit()
 
     # -- Stats -----------------------------------------------------------------
 

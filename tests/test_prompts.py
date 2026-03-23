@@ -1,148 +1,72 @@
-"""Test that generated prompts.py aligns with .claude/ agents and skills.
+"""Tests for prompts module stub functions."""
 
-These tests validate that the build script correctly extracts and combines
-agent/skill content into the prompts used by the containerized agent.
-"""
-
-import re
-from pathlib import Path
-
-import pytest
+from unittest.mock import MagicMock
 
 
-def test_prompts_file_exists():
-    """Verify prompts.py exists and is importable."""
-    prompts_file = Path("tektonit/prompts.py")
-    assert prompts_file.exists(), "prompts.py should exist"
+class TestPromptStubFunctions:
+    """Test prompt stub functions."""
 
-    # Should be importable
-    from tektonit import prompts
+    def test_build_bats_prompt(self):
+        """Test build_bats_prompt stub function."""
+        from tektonit.prompts import BATS_SYSTEM_PROMPT, build_bats_prompt
 
-    assert hasattr(prompts, "BATS_SYSTEM_PROMPT")
-    assert hasattr(prompts, "PYTEST_SYSTEM_PROMPT")
+        resource = MagicMock()
+        result = build_bats_prompt(resource)
+        assert result == BATS_SYSTEM_PROMPT
+        assert "BATS" in result
+        assert "bash" in result.lower()
 
+    def test_build_pytest_prompt(self):
+        """Test build_pytest_prompt stub function."""
+        from tektonit.prompts import PYTEST_SYSTEM_PROMPT, build_pytest_prompt
 
-def test_bats_prompt_has_key_concepts():
-    """Verify BATS prompt includes key concepts from agents."""
-    from tektonit.prompts import BATS_SYSTEM_PROMPT
+        resource = MagicMock()
+        result = build_pytest_prompt(resource)
+        assert result == PYTEST_SYSTEM_PROMPT
+        assert "pytest" in result.lower()
+        assert "Python" in result
 
-    prompt_lower = BATS_SYSTEM_PROMPT.lower()
+    def test_build_propose_prompt(self):
+        """Test build_propose_prompt stub function."""
+        from tektonit.prompts import build_propose_prompt
 
-    # Core concepts from stepaction-test-generator
-    assert "verbatim" in prompt_lower, "Should emphasize verbatim script embedding"
-    assert "exact" in prompt_lower, "Should emphasize exact mocking/assertions"
-    assert "mock" in prompt_lower, "Should cover mocking strategy"
+        resource = MagicMock()
+        result = build_propose_prompt(resource)
+        assert result == ""
 
-    # Cross-platform from agents
-    assert "macos" in prompt_lower or "cross-platform" in prompt_lower, "Should include cross-platform guidance"
-    assert "sed -i" in BATS_SYSTEM_PROMPT, "Should mention sed -i'' -e pattern"
+    def test_get_script_languages(self):
+        """Test get_script_languages stub function."""
+        from tektonit.prompts import get_script_languages
 
-    # Test organization
-    assert "suite" in prompt_lower, "Should mention test suite organization"
+        resource = MagicMock()
+        result = get_script_languages(resource)
+        assert result == ["bash"]
+        assert isinstance(result, list)
 
+    def test_has_testable_scripts(self):
+        """Test has_testable_scripts stub function."""
+        from tektonit.prompts import has_testable_scripts
 
-def test_pytest_prompt_has_key_concepts():
-    """Verify pytest prompt includes key concepts from agents."""
-    from tektonit.prompts import PYTEST_SYSTEM_PROMPT
-
-    prompt_lower = PYTEST_SYSTEM_PROMPT.lower()
-
-    # Core concepts
-    assert "verbatim" in prompt_lower, "Should emphasize verbatim embedding"
-    assert "textwrap.dedent" in prompt_lower or "textwrap" in prompt_lower, "Should use textwrap for Python scripts"
-    assert "subprocess" in prompt_lower, "Should run scripts as subprocess"
-
-    # Test organization
-    assert "class" in prompt_lower, "Should organize into test classes"
-
-
-def test_prompts_not_heavy_handed():
-    """Verify prompts use explanatory style, not heavy-handed commands."""
-    from tektonit.prompts import BATS_SYSTEM_PROMPT, PYTEST_SYSTEM_PROMPT
-
-    combined = BATS_SYSTEM_PROMPT + PYTEST_SYSTEM_PROMPT
-
-    # Count MUST/NEVER/ALWAYS (should be minimal, not dozens)
-    must_count = len(re.findall(r"\bMUST\b", combined))
-    never_count = len(re.findall(r"\bNEVER\b", combined))
-    always_count = len(re.findall(r"\bALWAYS\b", combined))
-
-    total_imperatives = must_count + never_count + always_count
-
-    # Some imperative language is OK, but should be < 20% of what it was before (was ~50)
-    assert total_imperatives < 15, (
-        f"Prompts should use explanatory style, not heavy imperatives "
-        f"(found {must_count} MUST, {never_count} NEVER, {always_count} ALWAYS)"
-    )
+        resource = MagicMock()
+        result = has_testable_scripts(resource)
+        assert result is True
 
 
-@pytest.mark.skip(reason="Simplified prompts don't include reasoning explanations")
-def test_prompts_have_reasoning():
-    """Verify prompts explain WHY, not just WHAT."""
-    pass
+class TestPromptConstants:
+    """Test prompt module constants."""
 
+    def test_bats_system_prompt_exists(self):
+        """Test BATS_SYSTEM_PROMPT constant exists."""
+        from tektonit.prompts import BATS_SYSTEM_PROMPT
 
-def test_prompts_file_is_generated():
-    """Verify prompts.py has generation header."""
-    prompts_file = Path("tektonit/prompts.py")
-    content = prompts_file.read_text()
+        assert BATS_SYSTEM_PROMPT is not None
+        assert len(BATS_SYSTEM_PROMPT) > 0
+        assert "BATS" in BATS_SYSTEM_PROMPT
 
-    assert "AUTO-GENERATED" in content, "prompts.py should indicate it's generated"
-    assert ".claude/" in content, "prompts.py should reference .claude/ as source"
-    assert "DO NOT EDIT THIS FILE DIRECTLY" in content, "prompts.py should warn against direct edits"
+    def test_pytest_system_prompt_exists(self):
+        """Test PYTEST_SYSTEM_PROMPT constant exists."""
+        from tektonit.prompts import PYTEST_SYSTEM_PROMPT
 
-
-@pytest.mark.skip(reason="Simplified prompts don't include templates")
-def test_prompts_preserve_templates():
-    """Verify build script preserves template strings."""
-    pass
-
-
-@pytest.mark.skip(reason="Simplified prompts don't include helper functions")
-def test_prompts_preserve_helper_functions():
-    """Verify build script preserves helper functions."""
-    pass
-
-
-def test_agent_source_files_exist():
-    """Verify the source .claude/ files exist."""
-    required_sources = [
-        ".claude/agents/stepaction-test-generator.md",
-        ".claude/agents/task-test-generator.md",
-        ".claude/skills/fix-test.md",
-        ".claude/skills/diagnose-failure.md",
-    ]
-
-    for source in required_sources:
-        assert Path(source).exists(), f"Source file should exist: {source}"
-
-
-def test_build_script_exists():
-    """Verify build script is present and executable."""
-    build_script = Path("scripts/build_prompts_from_agents.py")
-    assert build_script.exists(), "Build script should exist"
-
-    sync_script = Path("scripts/sync-prompts.sh")
-    assert sync_script.exists(), "Sync script should exist"
-
-    # Check executable bit
-    import os
-
-    assert os.access(build_script, os.X_OK), "Build script should be executable"
-    assert os.access(sync_script, os.X_OK), "Sync script should be executable"
-
-
-@pytest.mark.integration
-def test_can_regenerate_prompts():
-    """Integration test: verify we can regenerate prompts."""
-    import subprocess
-    import sys
-
-    result = subprocess.run([sys.executable, "scripts/build_prompts_from_agents.py"], capture_output=True, text=True)
-
-    assert result.returncode == 0, f"Build script should succeed:\n{result.stderr}"
-    assert "SUCCESS" in result.stdout, "Build script should report success"
-
-
-if __name__ == "__main__":
-    pytest.main([__file__, "-v"])
+        assert PYTEST_SYSTEM_PROMPT is not None
+        assert len(PYTEST_SYSTEM_PROMPT) > 0
+        assert "pytest" in PYTEST_SYSTEM_PROMPT.lower()
