@@ -1,5 +1,10 @@
 FROM python:3.12-slim-bookworm
 
+# Build-time prompt generation from .claude/ agents and skills
+# This ensures the container ALWAYS has the latest agent instructions
+# from the source of truth (.claude/), preventing drift between
+# Claude Code (.claude/) and containerized agent (tektonit/prompts.py)
+
 RUN apt-get update && \
     apt-get install -y --no-install-recommends \
       git \
@@ -16,8 +21,23 @@ RUN git clone --depth 1 https://github.com/bats-core/bats-core.git /tmp/bats-cor
 
 WORKDIR /app
 
+# Copy build dependencies first (for prompt generation from .claude/)
+COPY .claude/ .claude/
+COPY scripts/build_prompts_from_agents.py scripts/
+
+# Create tektonit package structure
+RUN mkdir -p tektonit
+
+# Generate prompts.py from .claude/ agents and skills (single source of truth)
+RUN python scripts/build_prompts_from_agents.py && \
+    python -m py_compile tektonit/prompts.py && \
+    echo "✓ Generated and validated prompts.py from .claude/ source"
+
+# Copy the rest of the package
 COPY pyproject.toml .
 COPY tektonit/ tektonit/
+
+# Install package
 RUN pip install --no-cache-dir .
 
 RUN mkdir -p /workspace /var/lib/tektonit && \

@@ -34,6 +34,9 @@ env/
 *~
 .DS_Store
 
+# Backups
+*.bak
+
 # Testing
 .pytest_cache/
 generated_tests/

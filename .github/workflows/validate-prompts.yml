@@ -1,0 +1,74 @@
+name: Validate Prompts Sync
+
+on:
+  push:
+    branches: [ main ]
+    paths:
+      - '.claude/agents/**'
+      - '.claude/skills/**'
+      - 'scripts/build_prompts_from_agents.py'
+      - 'tektonit/prompts.py'
+  pull_request:
+    branches: [ main ]
+    paths:
+      - '.claude/agents/**'
+      - '.claude/skills/**'
+      - 'scripts/build_prompts_from_agents.py'
+      - 'tektonit/prompts.py'
+
+jobs:
+  validate-prompts:
+    name: Validate prompts.py is in sync with .claude/
+    runs-on: ubuntu-latest
+
+    steps:
+      - name: Checkout code
+        uses: actions/checkout@v4
+
+      - name: Set up Python
+        uses: actions/setup-python@v5
+        with:
+          python-version: '3.12'
+
+      - name: Regenerate prompts.py from .claude/ source
+        run: |
+          echo "Regenerating prompts.py from .claude/ agents and skills..."
+          python scripts/build_prompts_from_agents.py
+
+      - name: Check for differences
+        run: |
+          if ! git diff --exit-code tektonit/prompts.py; then
+            echo "ERROR: prompts.py is out of sync with .claude/ source files!"
+            echo ""
+            echo "The .claude/agents/ or .claude/skills/ files were modified,"
+            echo "but prompts.py was not regenerated."
+            echo ""
+            echo "Please run:"
+            echo "  ./scripts/sync-prompts.sh"
+            echo ""
+            echo "Or manually:"
+            echo "  python scripts/build_prompts_from_agents.py"
+            echo "  git add tektonit/prompts.py"
+            echo ""
+            exit 1
+          fi
+          echo "✓ prompts.py is in sync with .claude/ source files"
+
+      - name: Validate Python syntax
+        run: |
+          echo "Validating prompts.py syntax..."
+          python -m py_compile tektonit/prompts.py
+          echo "✓ Syntax validation passed"
+
+      - name: Install dependencies
+        run: |
+          pip install -e ".[dev]"
+
+      - name: Run prompt validation tests
+        run: |
+          if [ -f tests/test_prompts.py ]; then
+            echo "Running prompt validation tests..."
+            python -m pytest tests/test_prompts.py -v
+          else
+            echo "No prompt validation tests found, skipping..."
+          fi
