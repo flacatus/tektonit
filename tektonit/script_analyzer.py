@@ -13,6 +13,7 @@ from dataclasses import dataclass, field
 @dataclass
 class BranchInfo:
     """An if/elif/else or case branch in the script."""
+
     condition: str
     line: int
     has_else: bool = False
@@ -21,6 +22,7 @@ class BranchInfo:
 @dataclass
 class LoopInfo:
     """A loop construct in the script."""
+
     kind: str  # "for", "while", "until"
     condition: str
     line: int
@@ -31,6 +33,7 @@ class LoopInfo:
 @dataclass
 class ExitPoint:
     """An exit or return statement."""
+
     code: str  # exit code expression
     line: int
     context: str  # surrounding line for context
@@ -39,6 +42,7 @@ class ExitPoint:
 @dataclass
 class CommandCall:
     """An external command invocation."""
+
     command: str
     args_pattern: str  # simplified arg pattern
     line: int
@@ -48,6 +52,7 @@ class CommandCall:
 @dataclass
 class ScriptAnalysis:
     """Complete analysis of a bash script."""
+
     total_lines: int = 0
     branches: list[BranchInfo] = field(default_factory=list)
     loops: list[LoopInfo] = field(default_factory=list)
@@ -120,11 +125,35 @@ def analyze_script(script: str) -> ScriptAnalysis:
     analysis.total_lines = len(lines)
 
     known_commands = {
-        "kubectl", "oc", "curl", "git", "oras", "jq", "yq",
-        "aws", "rosa", "gh", "docker", "podman", "skopeo",
-        "pip", "npm", "make", "helm", "kustomize", "cosign",
-        "tkn", "base64", "openssl", "wget", "shellcheck",
-        "hadolint", "date", "readlink", "sleep", "find",
+        "kubectl",
+        "oc",
+        "curl",
+        "git",
+        "oras",
+        "jq",
+        "yq",
+        "aws",
+        "rosa",
+        "gh",
+        "docker",
+        "podman",
+        "skopeo",
+        "pip",
+        "npm",
+        "make",
+        "helm",
+        "kustomize",
+        "cosign",
+        "tkn",
+        "base64",
+        "openssl",
+        "wget",
+        "shellcheck",
+        "hadolint",
+        "date",
+        "readlink",
+        "sleep",
+        "find",
     }
 
     in_loop_depth = 0
@@ -158,31 +187,44 @@ def analyze_script(script: str) -> ScriptAnalysis:
         if if_match:
             condition = if_match.group(1)[:80]
             # Look ahead for else
-            has_else = any("else" in lines[j].strip() and not lines[j].strip().startswith("#")
-                          for j in range(i, min(i + 30, len(lines))))
-            analysis.branches.append(BranchInfo(
-                condition=condition, line=i, has_else=has_else,
-            ))
+            has_else = any(
+                "else" in lines[j].strip() and not lines[j].strip().startswith("#")
+                for j in range(i, min(i + 30, len(lines)))
+            )
+            analysis.branches.append(
+                BranchInfo(
+                    condition=condition,
+                    line=i,
+                    has_else=has_else,
+                )
+            )
 
         # Case statements
         if stripped.startswith("case "):
-            analysis.branches.append(BranchInfo(
-                condition=stripped[:80], line=i, has_else=True,
-            ))
+            analysis.branches.append(
+                BranchInfo(
+                    condition=stripped[:80],
+                    line=i,
+                    has_else=True,
+                )
+            )
 
         # Loops
         for loop_kind in ("while", "until", "for"):
             if stripped.startswith(f"{loop_kind} "):
-                condition = stripped[len(loop_kind):].strip().rstrip("; do")[:60]
+                condition = stripped[len(loop_kind) :].strip().rstrip("; do")[:60]
                 in_loop_depth += 1
-                has_sleep = any("sleep" in lines[j]
-                                for j in range(i, min(i + 20, len(lines))))
-                has_break = any(re.search(r"\bbreak\b", lines[j])
-                                for j in range(i, min(i + 30, len(lines))))
-                analysis.loops.append(LoopInfo(
-                    kind=loop_kind, condition=condition, line=i,
-                    has_break=has_break, has_sleep=has_sleep,
-                ))
+                has_sleep = any("sleep" in lines[j] for j in range(i, min(i + 20, len(lines))))
+                has_break = any(re.search(r"\bbreak\b", lines[j]) for j in range(i, min(i + 30, len(lines))))
+                analysis.loops.append(
+                    LoopInfo(
+                        kind=loop_kind,
+                        condition=condition,
+                        line=i,
+                        has_break=has_break,
+                        has_sleep=has_sleep,
+                    )
+                )
 
         if stripped == "done":
             in_loop_depth = max(0, in_loop_depth - 1)
@@ -190,9 +232,13 @@ def analyze_script(script: str) -> ScriptAnalysis:
         # Exit points
         exit_match = re.search(r"\bexit\s+(\S+)", stripped)
         if exit_match:
-            analysis.exit_points.append(ExitPoint(
-                code=exit_match.group(1), line=i, context=stripped[:80],
-            ))
+            analysis.exit_points.append(
+                ExitPoint(
+                    code=exit_match.group(1),
+                    line=i,
+                    context=stripped[:80],
+                )
+            )
 
         # External commands
         for cmd in known_commands:
@@ -200,16 +246,31 @@ def analyze_script(script: str) -> ScriptAnalysis:
                 # Get simple args pattern
                 cmd_match = re.search(rf"\b{cmd}\s+(.*?)(?:\||;|&&|\)|\}}|$)", stripped)
                 args = cmd_match.group(1).strip()[:40] if cmd_match else ""
-                analysis.commands.append(CommandCall(
-                    command=cmd, args_pattern=args, line=i,
-                    in_pipeline="|" in stripped,
-                ))
+                analysis.commands.append(
+                    CommandCall(
+                        command=cmd,
+                        args_pattern=args,
+                        line=i,
+                        in_pipeline="|" in stripped,
+                    )
+                )
 
         # Variable reads
         for match in re.findall(r"\$\{?([A-Za-z_][A-Za-z0-9_]*)\}?", stripped):
-            if match not in ("PATH", "HOME", "PWD", "IFS", "BASH_SOURCE",
-                             "LINENO", "FUNCNAME", "PIPESTATUS", "OSTYPE",
-                             "SCRIPT_EOF", "EOF", "MOCK_EOF"):
+            if match not in (
+                "PATH",
+                "HOME",
+                "PWD",
+                "IFS",
+                "BASH_SOURCE",
+                "LINENO",
+                "FUNCNAME",
+                "PIPESTATUS",
+                "OSTYPE",
+                "SCRIPT_EOF",
+                "EOF",
+                "MOCK_EOF",
+            ):
                 analysis.variables_read.add(match)
 
         # Variable writes

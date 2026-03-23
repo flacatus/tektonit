@@ -1,12 +1,9 @@
 """Tests for the test generator."""
 
-from pathlib import Path
-
 import pytest
 
 from tektonit.generators import generate_test_file, generate_tests
 from tektonit.parser import parse_tekton_yaml
-
 
 SAMPLE_TASK_YAML = """\
 apiVersion: tekton.dev/v1

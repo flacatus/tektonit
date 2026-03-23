@@ -1,17 +1,12 @@
 """Tests for the Tekton YAML parser."""
 
-import tempfile
-from pathlib import Path
-
 import pytest
 
 from tektonit.parser import (
-    TektonResource,
     discover_tekton_files,
     load_all_resources,
     parse_tekton_yaml,
 )
-
 
 SAMPLE_TASK_YAML = """\
 apiVersion: tekton.dev/v1

@@ -55,12 +55,8 @@ class LLMProvider(ABC):
     def _record_metrics(self, provider_name: str, usage: dict | None, duration: float, success: bool):
         LLM_CALL_DURATION.labels(provider=provider_name, operation="generate").observe(duration)
         if usage:
-            LLM_TOKENS.labels(provider=provider_name, direction="input").inc(
-                usage.get("input_tokens", 0)
-            )
-            LLM_TOKENS.labels(provider=provider_name, direction="output").inc(
-                usage.get("output_tokens", 0)
-            )
+            LLM_TOKENS.labels(provider=provider_name, direction="input").inc(usage.get("input_tokens", 0))
+            LLM_TOKENS.labels(provider=provider_name, direction="output").inc(usage.get("output_tokens", 0))
 
 
 class GeminiProvider(LLMProvider):
@@ -127,10 +123,7 @@ class ClaudeProvider(LLMProvider):
         try:
             import anthropic
         except ImportError:
-            raise ImportError(
-                "Claude provider requires anthropic. "
-                "Install with: pip install 'tektonit[anthropic]'"
-            )
+            raise ImportError("Claude provider requires anthropic. Install with: pip install 'tektonit[anthropic]'")
         self._model = model
         self._client = anthropic.Anthropic(api_key=api_key or os.environ.get("ANTHROPIC_API_KEY"))
 
@@ -185,10 +178,7 @@ class OpenAICompatibleProvider(LLMProvider):
         try:
             import openai
         except ImportError:
-            raise ImportError(
-                "OpenAI provider requires openai. "
-                "Install with: pip install 'tektonit[openai]'"
-            )
+            raise ImportError("OpenAI provider requires openai. Install with: pip install 'tektonit[openai]'")
         self._model = model
         self._client = openai.OpenAI(
             api_key=api_key or os.environ.get("OPENAI_API_KEY"),

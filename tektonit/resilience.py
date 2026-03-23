@@ -23,22 +23,26 @@ log = logging.getLogger("tektonit")
 
 # -- Retry decorator for LLM calls ------------------------------------------
 
+
 def llm_retry(max_attempts: int = 3):
     """Retry decorator for LLM API calls with exponential backoff."""
     return retry(
         stop=stop_after_attempt(max_attempts),
         wait=wait_exponential(multiplier=2, min=3, max=60),
-        retry=retry_if_exception_type((
-            TimeoutError,
-            ConnectionError,
-            OSError,
-        )),
+        retry=retry_if_exception_type(
+            (
+                TimeoutError,
+                ConnectionError,
+                OSError,
+            )
+        ),
         before_sleep=before_sleep_log(log, logging.WARNING),
         reraise=True,
     )
 
 
 # -- Circuit breaker --------------------------------------------------------
+
 
 class CircuitBreaker:
     """Simple circuit breaker to fail fast when a service is down.
@@ -81,9 +85,9 @@ class CircuitBreaker:
             if self._failure_count >= self.fail_threshold:
                 self._state = self.OPEN
                 log.error(
-                    "Circuit breaker OPEN after %d failures. "
-                    "Will retry after %ds.",
-                    self._failure_count, self.reset_timeout,
+                    "Circuit breaker OPEN after %d failures. Will retry after %ds.",
+                    self._failure_count,
+                    self.reset_timeout,
                 )
 
     @property
@@ -97,6 +101,7 @@ github_breaker = CircuitBreaker(fail_threshold=3, reset_timeout=60)
 
 
 # -- Rate limiter ------------------------------------------------------------
+
 
 class TokenBucket:
     """Token bucket rate limiter for API calls."""

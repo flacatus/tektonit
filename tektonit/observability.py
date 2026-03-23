@@ -77,6 +77,7 @@ ERRORS = Counter(
 
 # -- Structured Logging ------------------------------------------------------
 
+
 class _JSONFormatter(logging.Formatter):
     """JSON log formatter for Kubernetes log aggregation."""
 
@@ -110,10 +111,12 @@ def setup_logging(json_format: bool | None = None):
     if json_format:
         handler.setFormatter(_JSONFormatter())
     else:
-        handler.setFormatter(logging.Formatter(
-            "%(asctime)s [%(levelname)s] %(message)s",
-            datefmt="%Y-%m-%dT%H:%M:%S",
-        ))
+        handler.setFormatter(
+            logging.Formatter(
+                "%(asctime)s [%(levelname)s] %(message)s",
+                datefmt="%Y-%m-%dT%H:%M:%S",
+            )
+        )
     root.addHandler(handler)
 
 

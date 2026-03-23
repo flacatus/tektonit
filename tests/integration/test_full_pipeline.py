@@ -5,7 +5,6 @@ Tests the complete flow:
 """
 
 import subprocess
-import tempfile
 from pathlib import Path
 
 import pytest
@@ -72,9 +71,7 @@ class TestBuildPipeline:
         prompt_text = prompts.BATS_SYSTEM_PROMPT + prompts.PYTEST_SYSTEM_PROMPT
 
         for concept in key_concepts:
-            assert (
-                concept.lower() in prompt_text.lower()
-            ), f"Missing key concept: {concept}"
+            assert concept.lower() in prompt_text.lower(), f"Missing key concept: {concept}"
 
     def test_build_is_idempotent(self):
         """Running build twice should produce identical structure (ignoring timestamps)."""
@@ -114,9 +111,7 @@ class TestBuildPipeline:
         first_prompts = extract_prompts(first_content)
         second_prompts = extract_prompts(second_content)
 
-        assert (
-            first_prompts == second_prompts
-        ), "Build generated different prompts (not idempotent)"
+        assert first_prompts == second_prompts, "Build generated different prompts (not idempotent)"
 
 
 class TestGenerationPipeline:
@@ -175,10 +170,6 @@ spec:
         assert "test-sample" in result.stdout or "1" in result.stdout, f"Resource not detected: {result.stdout}"
 
     @pytest.mark.slow
-    @pytest.mark.skipif(
-        "not config.getoption('--run-slow')",
-        reason="Slow test, requires LLM API",
-    )
     def test_generate_single_creates_test_file(self, sample_stepaction, tmp_path):
         """Test that generate-single creates a test file (requires API key)."""
         # This test requires GEMINI_API_KEY environment variable
@@ -198,9 +189,7 @@ spec:
         test_file = tmp_path / "sanity-check" / "test_sample_unit-tests.bats"
 
         if result.returncode == 0:
-            assert (
-                test_file.exists()
-            ), "Test file should be created in sanity-check/"
+            assert test_file.exists(), "Test file should be created in sanity-check/"
 
             # Verify test file structure
             content = test_file.read_text()
@@ -260,15 +249,11 @@ class TestEndToEnd:
         assert skills_dir.exists(), ".claude/skills/ missing"
 
         # Check for key agent files
-        assert (
-            agents_dir / "stepaction-test-generator.md"
-        ).exists(), "StepAction agent missing"
+        assert (agents_dir / "stepaction-test-generator.md").exists(), "StepAction agent missing"
         assert (agents_dir / "task-test-generator.md").exists(), "Task agent missing"
 
         # Check for key skill files
-        assert (
-            skills_dir / "generate-tekton-tests.md"
-        ).exists(), "Main skill missing"
+        assert (skills_dir / "generate-tekton-tests.md").exists(), "Main skill missing"
 
         # 2. Build prompts from agents
         result = subprocess.run(

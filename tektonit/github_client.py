@@ -54,9 +54,7 @@ class GitHubClient:
             self._git(["checkout", branch], work_dir)
             self._git(["reset", "--hard", f"origin/{branch}"], work_dir)
             # Clean old agent branches
-            result = self._git(
-                ["branch", "--list", "tektonit/*"], work_dir, check=False
-            )
+            result = self._git(["branch", "--list", "tektonit/*"], work_dir, check=False)
             for b in result.stdout.strip().splitlines():
                 b = b.strip()
                 if b:
@@ -66,10 +64,7 @@ class GitHubClient:
         else:
             log.info("Cloning %s to %s", self.repo_full_name, work_dir)
             work_path.parent.mkdir(parents=True, exist_ok=True)
-            self._git(
-                ["clone", "--branch", branch, "--depth=1",
-                 self.authenticated_url(), work_dir]
-            )
+            self._git(["clone", "--branch", branch, "--depth=1", self.authenticated_url(), work_dir])
 
         self._git(["config", "user.name", "tektonit"], work_dir)
         self._git(["config", "user.email", "tektonit@noreply.github.com"], work_dir)
@@ -83,9 +78,7 @@ class GitHubClient:
         self._git(["branch", "-D", branch_name], work_dir, check=False)
         self._git(["checkout", "-b", branch_name], work_dir)
 
-    def commit_and_push(
-        self, work_dir: str, branch_name: str, files: list[str], message: str
-    ) -> bool:
+    def commit_and_push(self, work_dir: str, branch_name: str, files: list[str], message: str) -> bool:
         """Stage specific files, commit, and push. Returns True if pushed."""
         for f in files:
             self._git(["add", f], work_dir, check=False)
@@ -170,9 +163,7 @@ class GitHubClient:
         log.error("Failed to create PR after %d attempts", MAX_RETRIES)
         return None
 
-    def _git(
-        self, args: list[str], cwd: str | None = None, check: bool = True
-    ) -> subprocess.CompletedProcess:
+    def _git(self, args: list[str], cwd: str | None = None, check: bool = True) -> subprocess.CompletedProcess:
         cmd = ["git"] + args
         log.debug("$ %s", " ".join(cmd))
         return subprocess.run(cmd, cwd=cwd, capture_output=True, text=True, check=check)

@@ -264,8 +264,11 @@ def discover_tekton_files(root: str | Path) -> list[Path]:
             try:
                 text = f.read_text()
                 tekton_kinds = (
-                    "kind: Task", "kind: Pipeline", "kind: PipelineRun",
-                    "kind: StepAction", "kind: ClusterTask",
+                    "kind: Task",
+                    "kind: Pipeline",
+                    "kind: PipelineRun",
+                    "kind: StepAction",
+                    "kind: ClusterTask",
                 )
                 if any(k in text for k in tekton_kinds):
                     # Skip .tekton/ CI configs and GitHub workflows
