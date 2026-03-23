@@ -58,17 +58,19 @@ OUTPUT: Only the .py test file, no markdown, no explanations."""
         f.write("# " + "─" * 78 + "\n")
         f.write("# BATS system prompt\n")
         f.write("# " + "─" * 78 + "\n\n")
-        # Use double quotes for consistency with ruff
-        bats_escaped = bats_prompt.replace("\\", "\\\\").replace('"', '\\"').replace("\n", "\\n")
-        f.write(f'BATS_SYSTEM_PROMPT = "{bats_escaped}"\n\n')
+        # Use triple-quoted strings to avoid quote escaping inconsistencies across Python versions
+        f.write('BATS_SYSTEM_PROMPT = """')
+        f.write(bats_prompt.replace('\\', '\\\\').replace('"""', r'\"\"\"'))
+        f.write('"""\n\n')
 
         # PYTEST system prompt
         f.write("# " + "─" * 78 + "\n")
         f.write("# PYTEST system prompt\n")
         f.write("# " + "─" * 78 + "\n\n")
-        # Use double quotes for consistency with ruff
-        pytest_escaped = pytest_prompt.replace("\\", "\\\\").replace('"', '\\"').replace("\n", "\\n")
-        f.write(f'PYTEST_SYSTEM_PROMPT = "{pytest_escaped}"\n')
+        # Use triple-quoted strings to avoid quote escaping inconsistencies across Python versions
+        f.write('PYTEST_SYSTEM_PROMPT = """')
+        f.write(pytest_prompt.replace('\\', '\\\\').replace('"""', r'\"\"\"'))
+        f.write('"""\n')
 
     print(f"✓ Generated {output}")
     print(f"  - BATS_SYSTEM_PROMPT: {len(bats_prompt)} chars")
